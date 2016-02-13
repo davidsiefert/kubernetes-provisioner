@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"os/exec"
 	"path/filepath"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"github.com/c4milo/unzipit"
 )
 
 func main() {
@@ -16,11 +18,40 @@ func main() {
 		fmt.Printf("Failed to download kubernetes: %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Kubernetes downloaded to %s", path)
+	fmt.Printf("Kubernetes downloaded to %s\n", path)
+
+	extractErr := extract(path, userHome())
+	if extractErr != nil {
+		fmt.Printf("Failed to extract kubernetes: %s\n", extractErr)
+		os.Exit(1)
+	}
 
 	correctPrerequisite(detectDocker, "Could not detect docker")
 }
 
+func extract(srcArchive, destDir string) error {
+	archive, openErr := os.Open(srcArchive)
+	if openErr != nil {
+		return openErr
+	}
+	defer archive.Close()
+
+	_, unpackErr := unzipit.Unpack(archive, destDir)
+	if unpackErr != nil {
+		return unpackErr
+	}
+
+	return nil
+}
+
+func userHome() string {
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+	return usr.HomeDir
+}
+	
 func downloadKubernetes() (string, error) {
 	tempDirPath, tempDirErr := ioutil.TempDir(os.TempDir(), "kubernetes")
 	if tempDirErr != nil {
