@@ -9,25 +9,30 @@ import System.FilePath ((</>))
 import Network.Wreq (get, responseBody)
 import Control.Lens ((^.))
 import Data.ByteString.Lazy (readFile, writeFile)
-import System.Directory (getHomeDirectory)
+import System.Directory (getHomeDirectory, doesFileExist, createDirectoryIfMissing)
 import Codec.Compression.GZip (decompress)
 import Codec.Archive.Tar (read, unpack)
 
 downloadKubernetes :: IO ()
 downloadKubernetes = do
-  withSystemTempDirectory "kubernetes" (\tempPath -> do
-    kubernetesArchivePath <- downloadKubernetesInto tempPath
-    homePath <- getHomeDirectory
-    extractRelease kubernetesArchivePath homePath
-    )
+  homePath <- getHomeDirectory
+  downloadDir <- createDownloadDirectory
+  kubernetesArchivePath <- downloadKubernetesInto downloadDir
+  extractRelease kubernetesArchivePath homePath
+
+createDownloadDirectory :: IO String
+createDownloadDirectory = do
+  homePath <- getHomeDirectory
+  let downloadDirectory = homePath </> ".downloads"
+  createDirectoryIfMissing True downloadDirectory
+  return downloadDirectory
 
 provisionEtcd :: IO ()
 provisionEtcd = do
-  withSystemTempDirectory "etcd" (\tempPath -> do
-    etcdArchivePath <- downloadEtcdInto tempPath
-    homePath <- getHomeDirectory
-    extractRelease etcdArchivePath homePath
-    )
+  homePath <- getHomeDirectory
+  downloadDir <- createDownloadDirectory
+  etcdArchivePath <- downloadEtcdInto downloadDir
+  extractRelease etcdArchivePath homePath
   -- template config /etc/default/etcd: ETCD_OPTS="-name infra -listen-client-urls http://0.0.0.0:4001 -advertise-client-urls http://127.0.0.1:4001"
 
 downloadKubernetesInto :: FilePath -> IO String
@@ -38,10 +43,15 @@ downloadEtcdInto = downloadInto "https://github.com/coreos/etcd/releases/downloa
 
 downloadInto :: String -> String -> FilePath -> IO String
 downloadInto url outputFilename tempPath = do
-  response <- get url
-  let archivePath = tempPath </> outputFilename
-  writeFile archivePath (response ^. responseBody)
+  archivePath <- return $ tempPath </> outputFilename
+  downloadIt <- not <$> doesFileExist archivePath
+  if downloadIt then download url archivePath else return () 
   return archivePath
+
+download :: String -> FilePath -> IO ()
+download url out = do
+  response <- get url
+  writeFile out (response ^. responseBody)
 
 extractRelease :: FilePath -> FilePath -> IO ()
 extractRelease srcFile destDir = do
