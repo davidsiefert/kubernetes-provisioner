@@ -7,26 +7,52 @@ import (
 	"os/exec"
 	"path/filepath"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"github.com/c4milo/unzipit"
 )
 
 func main() {
-	path, err := downloadKubernetes()
+	err := provisionEtcd()
 	if err != nil {
-		fmt.Printf("Failed to download kubernetes: %s\n", err)
+		fmt.Printf("Failed to provision etcd: %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Kubernetes downloaded to %s\n", path)
 
-	extractErr := extract(path, userHome())
-	if extractErr != nil {
-		fmt.Printf("Failed to extract kubernetes: %s\n", extractErr)
+	err = provisionKubernetes()
+	if err != nil {
+		fmt.Printf("Failed to provision kubernetes: %s\n", err)
 		os.Exit(1)
 	}
 
 	correctPrerequisite(detectDocker, "Could not detect docker")
+}
+
+func provisionEtcd() error {
+	path, err := downloadEtcd()
+	if err != nil {
+		return err
+	}
+
+	extractErr := extract(path, userHome())
+	if extractErr != nil {
+		return extractErr
+	}
+
+	return nil
+}
+
+func provisionKubernetes() error {
+	path, err := downloadKubernetes()
+	if err != nil {
+		return err
+	}
+
+	extractErr := extract(path, userHome())
+	if extractErr != nil {
+		return extractErr
+	}
+
+	return nil
 }
 
 func extract(srcArchive, destDir string) error {
@@ -51,32 +77,43 @@ func userHome() string {
 	}
 	return usr.HomeDir
 }
-	
+
+func downloadEtcd() (string, error) {
+	return download("https://github.com/coreos/etcd/releases/download/v2.0.12/etcd-v2.0.12-linux-amd64.tar.gz", "etcd-2.0.12.tar.gz")
+}
+
 func downloadKubernetes() (string, error) {
-	tempDirPath, tempDirErr := ioutil.TempDir(os.TempDir(), "kubernetes")
-	if tempDirErr != nil {
-		return "", tempDirErr
+	return download("https://github.com/kubernetes/kubernetes/releases/download/v1.1.2/kubernetes.tar.gz", "kubernetes-1.1.2.tar.gz")
+}
+
+func download(url, destName string) (string, error) {
+	downloadsDir := filepath.Join(userHome(), ".downloads")
+	err := os.MkdirAll(downloadsDir, 0777)
+	if err != nil {
+		return "", err
 	}
 
-	kubernetesFilePath := filepath.Join(tempDirPath, "kubernetes-1.1.2.tar.gz")
-	kubernetesFile, kubernetesFileErr := os.Create(kubernetesFilePath)
-	if kubernetesFileErr != nil {
-		return "", kubernetesFileErr
+	targetFilePath := filepath.Join(downloadsDir, destName)
+	if _, err := os.Stat(targetFilePath); os.IsNotExist(err) {
+		targetFile, targetFileErr := os.Create(targetFilePath)
+		if targetFileErr != nil {
+			return "", targetFileErr
+		}
+		defer targetFile.Close()
+	
+		response, httpErr := http.Get(url)
+		if httpErr != nil {
+			return "", httpErr
+		}
+		defer response.Body.Close()
+	
+		_, writeErr := io.Copy(targetFile, response.Body)
+		if writeErr != nil {
+			return "", writeErr
+		}
 	}
-	defer kubernetesFile.Close()
 
-	response, httpErr := http.Get("https://github.com/kubernetes/kubernetes/releases/download/v1.1.2/kubernetes.tar.gz")
-	if httpErr != nil {
-		return "", httpErr
-	}
-	defer response.Body.Close()
-
-	_, writeErr := io.Copy(kubernetesFile, response.Body)
-	if writeErr != nil {
-		return "", writeErr
-	}
-
-	return kubernetesFilePath, nil
+	return targetFilePath, nil
 }
 
 func correctPrerequisite(detector func() error, msg string) {
