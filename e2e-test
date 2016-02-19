@@ -1,0 +1,8 @@
+#!/bin/bash
+stack build
+vagrant up
+vagrant snapshot push
+scp `stack exec which kubernetes-provisioner` kubernetes-test:/home/vagrant/kubernetes-provisioner
+ssh kubernetes-test /home/vagrant/kubernetes-provisioner
+ssh kubernetes-test
+vagrant snapshot pop
