@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/user"
-	"os/exec"
-	"path/filepath"
+	"github.com/c4milo/unzipit"
 	"io"
 	"net/http"
-	"github.com/c4milo/unzipit"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
 )
 
 func main() {
@@ -100,13 +100,13 @@ func download(url, destName string) (string, error) {
 			return "", targetFileErr
 		}
 		defer targetFile.Close()
-	
+
 		response, httpErr := http.Get(url)
 		if httpErr != nil {
 			return "", httpErr
 		}
 		defer response.Body.Close()
-	
+
 		_, writeErr := io.Copy(targetFile, response.Body)
 		if writeErr != nil {
 			return "", writeErr

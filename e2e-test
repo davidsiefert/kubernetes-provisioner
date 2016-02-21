@@ -1,0 +1,8 @@
+#!/bin/bash
+go build
+vagrant up
+vagrant snapshot push
+scp kubernetes-provisioner kubernetes-test:/home/vagrant/kubernetes-provisioner
+ssh kubernetes-test /home/vagrant/kubernetes-provisioner
+ssh kubernetes-test
+vagrant snapshot pop
