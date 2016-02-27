@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module KubernetesProvisioner where
 
 import Prelude hiding (writeFile, read, readFile)
@@ -8,10 +8,14 @@ import Data.Monoid ((<>))
 import System.FilePath ((</>))
 import Network.Wreq (get, responseBody)
 import Control.Lens ((^.))
-import Data.ByteString.Lazy (readFile, writeFile)
-import System.Directory (getHomeDirectory, doesFileExist, createDirectoryIfMissing)
+import qualified Data.ByteString.Lazy as DBL (readFile, writeFile)
+import qualified Data.ByteString as DB (ByteString, writeFile)
+import System.Directory (getHomeDirectory, doesFileExist, createDirectoryIfMissing, copyFile)
 import Codec.Compression.GZip (decompress)
 import Codec.Archive.Tar (read, unpack)
+import Data.FileEmbed (embedFile)
+import System.Posix.Files (setFileMode, ownerExecuteMode)
+import System.Process (callProcess)
 
 downloadKubernetes :: IO ()
 downloadKubernetes = do
@@ -33,7 +37,18 @@ provisionEtcd = do
   downloadDir <- createDownloadDirectory
   etcdArchivePath <- downloadEtcdInto downloadDir
   extractRelease etcdArchivePath homePath
-  -- template config /etc/default/etcd: ETCD_OPTS="-name infra -listen-client-urls http://0.0.0.0:4001 -advertise-client-urls http://127.0.0.1:4001"
+  createDirectoryIfMissing True "/opt/bin"
+  copyFile (homePath </> "etcd-v2.0.12-linux-amd64/etcd") ("/opt/bin/etcd")
+  setFileMode "/opt/bin/etcd" ownerExecuteMode
+  installSystemdService "etcd" $(embedFile "templates/etcd.default") $(embedFile "templates/etcd.service")
+  callProcess "/bin/systemctl" ["daemon-reload"]
+  callProcess "/bin/systemctl" ["start", "etcd"]
+  callProcess "/bin/systemctl" ["status", "etcd"]
+
+installSystemdService :: String -> DB.ByteString -> DB.ByteString -> IO ()
+installSystemdService name environmentConfigContents serviceConfigContents = do
+  DB.writeFile ("/etc/default/" ++ name) environmentConfigContents
+  DB.writeFile ("/lib/systemd/system/" ++ name ++ ".service") serviceConfigContents
 
 downloadKubernetesInto :: FilePath -> IO String
 downloadKubernetesInto = downloadInto "https://github.com/kubernetes/kubernetes/releases/download/v1.1.2/kubernetes.tar.gz" "kubernetes-1.1.2.tar.gz"
@@ -51,11 +66,11 @@ downloadInto url outputFilename tempPath = do
 download :: String -> FilePath -> IO ()
 download url out = do
   response <- get url
-  writeFile out (response ^. responseBody)
+  DBL.writeFile out (response ^. responseBody)
 
 extractRelease :: FilePath -> FilePath -> IO ()
 extractRelease srcFile destDir = do
-  unpack destDir . read . decompress =<< readFile srcFile
+  unpack destDir . read . decompress =<< DBL.readFile srcFile
 
 correctPrerequisite :: Int -> String -> IO ()
 correctPrerequisite exit msg = case exit of
