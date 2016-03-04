@@ -1,0 +1,6 @@
+[Unit]
+Description=kube-controller-manager
+
+[Service]
+EnvironmentFile=/etc/default/kube-controller-manager
+ExecStart=/opt/bin/kube-controller-manager $KUBE_CONTROLLERMANAGER_OPTS

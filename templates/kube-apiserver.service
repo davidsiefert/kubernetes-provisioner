@@ -1,0 +1,6 @@
+[Unit]
+Description=kube-apiserver
+
+[Service]
+EnvironmentFile=/etc/default/kube-apiserver
+ExecStart=/opt/bin/kube-apiserver $KUBE_APISERVER_OPTS

@@ -1,0 +1,6 @@
+[Unit]
+Description=kube-scheduler
+
+[Service]
+EnvironmentFile=/etc/default/kube-scheduler
+ExecStart=/opt/bin/kube-scheduler $KUBE_SCHEDULER_OPTS
