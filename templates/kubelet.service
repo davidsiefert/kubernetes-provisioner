@@ -1,0 +1,6 @@
+[Unit]
+Description=kubelet
+
+[Service]
+EnvironmentFile=/etc/default/kubelet
+ExecStart=/opt/bin/kubelet $KUBELET_OPTS

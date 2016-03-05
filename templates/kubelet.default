@@ -1,0 +1,1 @@
+KUBELET_OPTS="--api-servers=127.0.0.1:8080"

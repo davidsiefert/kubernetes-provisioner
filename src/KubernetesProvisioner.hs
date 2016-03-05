@@ -39,21 +39,26 @@ provisionKubernetesMaster = do
   provisionExecutable "kube-scheduler" (homePath </> "kubernetes" </> "server" </> "bin" </> "kube-scheduler") "/opt/bin/kube-scheduler"
   provisionExecutable "kube-controller-manager" (homePath </> "kubernetes" </> "server" </> "bin" </> "kube-controller-manager") "/opt/bin/kube-controller-manager"
 
+provisionKubernetesMinion :: IO ()
+provisionKubernetesMinion = do
+  homePath <- getHomeDirectory
+  downloadDir <- createDownloadDirectory
+  kubernetesArchivePath <- downloadKubernetesInto downloadDir
+  extractRelease kubernetesArchivePath homePath
+  extractRelease (homePath </> "kubernetes" </> "server" </> "kubernetes-server-linux-amd64.tar.gz") homePath
+  provisionExecutable "kubelet" (homePath </> "kubernetes" </> "server" </> "bin" </> "kubelet") "/opt/bin/kubelet"
+  provisionExecutable "kube-proxy" (homePath </> "kubernetes" </> "server" </> "bin" </> "kube-proxy") "/opt/bin/kube-proxy"
+
 provisionExecutable :: String -> FilePath -> FilePath -> IO ()
 provisionExecutable serviceName srcExecutable destExecutable = do
-  --putStrLn $ "===> Provisioning " <> serviceName
   createDirectoryIfMissing True "/opt/bin"
-  --putStrLn $ "===> Copying " <> srcExecutable
   copyFile srcExecutable destExecutable
   setFileMode destExecutable ownerExecuteMode
   configData <- return $ lookup (serviceName <> ".default") templatesDir
   serviceData <- return $ lookup (serviceName <> ".service") templatesDir
-  --putStrLn $ show configData
-  --putStrLn $ show serviceData
   case installSystemdService serviceName <$> configData <*> serviceData of
     Just x -> x
     Nothing -> (putStrLn $ "Failed installing " <> serviceName)
-  --putStrLn $ "===> Starting " <> serviceName
   mapM_ (callProcess "/bin/systemctl") [["daemon-reload"], ["start", serviceName], ["status", serviceName]]
 
 createDownloadDirectory :: IO String
@@ -65,9 +70,7 @@ createDownloadDirectory = do
 
 installSystemdService :: String -> DB.ByteString -> DB.ByteString -> IO ()
 installSystemdService name environmentConfigContents serviceConfigContents = do
-  putStrLn ("===> Writing environment config for " <> name)
   DB.writeFile ("/etc/default/" <> name) environmentConfigContents
-  putStrLn ("===> Writing service config for " <> name)
   DB.writeFile ("/lib/systemd/system/" <> name <> ".service") serviceConfigContents
 
 downloadKubernetesInto :: FilePath -> IO String
