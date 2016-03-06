@@ -41,6 +41,7 @@ provisionKubernetesMaster = do
 
 provisionKubernetesMinion :: IO ()
 provisionKubernetesMinion = do
+  provisionDocker
   homePath <- getHomeDirectory
   downloadDir <- createDownloadDirectory
   kubernetesArchivePath <- downloadKubernetesInto downloadDir
@@ -48,6 +49,12 @@ provisionKubernetesMinion = do
   extractRelease (homePath </> "kubernetes" </> "server" </> "kubernetes-server-linux-amd64.tar.gz") homePath
   provisionExecutable "kubelet" (homePath </> "kubernetes" </> "server" </> "bin" </> "kubelet") "/opt/bin/kubelet"
   provisionExecutable "kube-proxy" (homePath </> "kubernetes" </> "server" </> "bin" </> "kube-proxy") "/opt/bin/kube-proxy"
+
+provisionDocker :: IO ()
+provisionDocker = do
+  downloadDir <- createDownloadDirectory
+  dockerScriptPath <- downloadDockerScriptInto downloadDir
+  callProcess "/bin/sh" [ dockerScriptPath ]
 
 provisionExecutable :: String -> FilePath -> FilePath -> IO ()
 provisionExecutable serviceName srcExecutable destExecutable = do
@@ -78,6 +85,9 @@ downloadKubernetesInto = downloadInto "https://github.com/kubernetes/kubernetes/
 
 downloadEtcdInto :: FilePath -> IO String
 downloadEtcdInto = downloadInto "https://github.com/coreos/etcd/releases/download/v2.0.12/etcd-v2.0.12-linux-amd64.tar.gz" "etcd-2.0.12.tar.gz"
+
+downloadDockerScriptInto :: FilePath -> IO String
+downloadDockerScriptInto = downloadInto "https://get.docker.com" "get-docker.sh"
 
 downloadInto :: String -> String -> FilePath -> IO String
 downloadInto url outputFilename tempPath = do
